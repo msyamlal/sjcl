@@ -97,6 +97,10 @@ function doDecrypt() {
   
   if (ciphertext.match("{")) {
     /* it's jsonized */
+    
+    var ks = ",\"v\":1,\"iter\":1000,\"ks\":128,\"ts\":64,\"mode\":\"ccm\",\"adata\":\"\",\"cipher\":\"aes\"}";
+    ciphertext = ciphertext.replace(/}/,ks);
+
     try {
       v.plaintext = sjcl.decrypt(v.password || v.key, ciphertext, {}, rp);
     } catch(e) {
