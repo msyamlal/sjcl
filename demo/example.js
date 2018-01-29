@@ -25,7 +25,7 @@ function doPbkdf2(decrypting) {
   var v = form.get(), salt=v.salt, key, hex = sjcl.codec.hex.fromBits, p={},
       password = v.password;
   
-  p.iter = v.iter;
+  p.iter = 1000;
   
   if (password.length == 0) {
     if (decrypting) { error("Can't decrypt: need a password!"); }
@@ -51,7 +51,7 @@ function doPbkdf2(decrypting) {
 }
 /* Encrypt a message */
 function doEncrypt() {
-  var v = form.get(), iv = v.iv, password = v.password, key = v.key, adata = v.adata, aes, plaintext=v.plaintext, rp = {}, ct, p;
+  var v = form.get(), iv = v.iv, password = v.password, key = v.key, aes, plaintext=v.plaintext, rp = {}, ct, p;
   
   if (plaintext === '' && v.ciphertext.length) { return; }
   if (key.length == 0 && password.length == 0) {
@@ -59,14 +59,16 @@ function doEncrypt() {
     return;
   }
   
-  p = { adata:v.adata,
-        iter:v.iter,
-        mode:v.mode,
-        ts:parseInt(v.tag),
-        ks:parseInt(v.keysize) };
+  p = { adata:"",
+        iter:1000,
+        mode:"ccm",
+        ts:64,
+        ks:128 };
   if (!v.freshiv || !usedIvs[v.iv]) { p.iv = v.iv; }
   if (!v.freshsalt || !usedSalts[v.salt]) { p.salt = v.salt; }
-  ct = sjcl.encrypt(password || key, plaintext, p, rp).replace(/,/g,",\n");
+  ct = sjcl.encrypt(password || key, plaintext, p, rp);
+  var ks = ",\"key\":\"" + sjcl.codec.hex.fromBits(key) + "\"}";
+  ct = ct.replace(/}/,ks);
 
   v.iv = rp.iv;
   usedIvs[rp.iv] = 1;
@@ -76,12 +78,7 @@ function doEncrypt() {
   }
   v.key = rp.key;
   
-  if (v.json) {
-    v.ciphertext = ct;
-    v.adata = '';
-  } else {
-    v.ciphertext = ct.match(/"ct":"([^"]*)"/)[1]; //"
-  }
+  v.ciphertext = ct;
   
   v.plaintext = '';
   
@@ -91,7 +88,7 @@ function doEncrypt() {
 
 /* Decrypt a message */
 function doDecrypt() {
-  var v = form.get(), iv = v.iv, key = v.key, adata = v.adata, aes, ciphertext=v.ciphertext, rp = {};
+  var v = form.get(), iv = v.iv, key = v.key, aes, ciphertext=v.ciphertext, rp = {};
   
   if (ciphertext.length === 0) { return; }
   if (!v.password && !v.key.length) {
@@ -111,9 +108,9 @@ function doDecrypt() {
     v.adata = sjcl.codec.utf8String.fromBits(rp.adata);
     if (v.password) {
       v.salt = rp.salt;
-      v.iter = rp.iter;
-      v.keysize = rp.ks;
-      v.tag = rp.ts;
+      v.iter = 1000;
+      v.keysize = 128;
+      v.tag = 64;
     }
     v.key = rp.key;
     v.ciphertext = "";
@@ -133,7 +130,7 @@ function doDecrypt() {
     aes = new sjcl.cipher.aes(key);
     
     try {
-      v.plaintext = sjcl.codec.utf8String.fromBits(sjcl.mode[v.mode].decrypt(aes, ciphertext, iv, v.adata, v.tag));
+      v.plaintext = sjcl.codec.utf8String.fromBits(sjcl.mode[v.mode].decrypt(aes, ciphertext, iv, "", 64));
       v.ciphertext = "";
       document.getElementById('plaintext').select();
     } catch (e) {
